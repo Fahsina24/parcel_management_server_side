@@ -45,6 +45,11 @@ async function run() {
         return res.send(result);
       }
     });
+
+    app.get("/", async (req, res) => {
+      res.send("application is running");
+    });
+
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
     // console.log(
