@@ -26,24 +26,35 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     const userCollection = client.db("parcelDB").collection("users");
+    const parcelCollection = client.db("parcelDB").collection("bookedParcels");
     // save or update users
     app.post("/users/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email };
       const user = req.body;
-      console.log(user);
+      // console.log(user);
       const existUser = await userCollection.findOne(query);
       if (existUser) {
-        console.log("user exists before");
+        // console.log("user exists before");
         return res.send(existUser);
       } else {
         const result = await userCollection.insertOne({
           ...user,
-          role: "user",
         });
-        console.log(result);
+        // console.log(result);
         return res.send(result);
       }
+    });
+
+    app.post("/bookedParcels", async (req, res) => {
+      const result = req.body;
+      // console.log(result);
+      const parcelInfo = await parcelCollection.insertOne(result);
+      res.send(parcelInfo);
+    });
+    app.get("/bookedParcels", async (req, res) => {
+      const result = req.body;
+      // console.log(result);
     });
 
     app.get("/", async (req, res) => {
@@ -63,5 +74,5 @@ async function run() {
 run().catch(console.dir);
 
 app.listen(3000, () => {
-  console.log("application is running");
+  // console.log("application is running");
 });
