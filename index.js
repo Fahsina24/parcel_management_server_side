@@ -52,9 +52,10 @@ async function run() {
       const parcelInfo = await parcelCollection.insertOne(result);
       res.send(parcelInfo);
     });
-    app.get("/bookedParcels", async (req, res) => {
-      const result = req.body;
-      // console.log(result);
+    app.get("/allParcels", async (req, res) => {
+      const allParcels = await parcelCollection.find().toArray();
+      // console.log(cursor);
+      res.send(allParcels);
     });
 
     app.get("/", async (req, res) => {
