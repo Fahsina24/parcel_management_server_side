@@ -3,7 +3,8 @@ const express = require("express");
 const app = express();
 const port = process.env.PORT || 3000;
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 //middleware
 
@@ -58,8 +59,56 @@ async function run() {
       res.send(allParcels);
     });
 
+    app.get("/myParcels/:email", async (req, res) => {
+      const email = req.params.email;
+      // console.log(email);
+      const myParcels = await parcelCollection
+        .find({
+          buyerEmail: email,
+        })
+        .toArray();
+      // console.log(myParcels);
+      res.send(myParcels);
+    });
+
+    app.get("/singleParcel/:id", async (req, res) => {
+      const id = req.params.id;
+      // console.log(id);
+      const query = { _id: new ObjectId(id) };
+      // console.log(query);
+      const singleParcels = await parcelCollection.findOne(query);
+      return res.send(singleParcels);
+    });
+
     app.get("/", async (req, res) => {
       res.send("application is running");
+    });
+
+    //Update function
+
+    app.patch("/update/:id", async (req, res) => {
+      const id = req.params.id;
+      const data = req.body;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: {
+          buyerEmail: data?.buyerEmail,
+          buyerName: data?.buyerName,
+          buyerPhoneNo: data?.buyerPhoneNo,
+          deliveryAddress: data?.deliveryAddress,
+          deliveryDate: data?.deliveryDate,
+          latitude: data?.latitude,
+          longitude: data?.longitude,
+          parcelType: data?.parcelType,
+          parcelWeight: data?.parcelWeight,
+          price: data?.price,
+          receiverName: data?.receiverName,
+          receiverPhoneNo: data?.receiverPhoneNo,
+          status: data?.status,
+        },
+      };
+      const result = await parcelCollection.updateOne(query, update);
+      res.json(result);
     });
 
     // Send a ping to confirm a successful connection
