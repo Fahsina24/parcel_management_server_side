@@ -111,6 +111,40 @@ async function run() {
       res.json(result);
     });
 
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await userCollection.find({ email }).toArray();
+      res.send(result);
+    });
+
+    app.get("/userProfile/:email", async (req, res) => {
+      const email = req.params.email;
+
+      const result = await userCollection.findOne({ email });
+      res.send(result);
+    });
+
+    app.patch("/userProfile/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const response = req.body;
+      console.log(email, query, response);
+      const update = {
+        $set: {
+          photoURL: req.body.photoURL,
+        },
+      };
+      console.log(update);
+      try {
+        const result = await userCollection.updateOne(query, update);
+        console.log(result); // Log update result
+        res.json(result); // Return result to client
+      } catch (error) {
+        console.error("Error updating user:", error);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    });
+
     // Cancel Function
 
     app.patch("/cancel/:id", async (req, res) => {
