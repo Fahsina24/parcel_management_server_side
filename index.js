@@ -75,6 +75,16 @@ async function run() {
       res.send(myParcels);
     });
 
+    // get parcels by id
+    app.get("/singleParcel/:id", async (req, res) => {
+      const id = req.params.id;
+      // console.log(id);
+      const query = { _id: new ObjectId(id) };
+      // console.log(query);
+      const singleParcels = await parcelCollection.findOne(query);
+      return res.send(singleParcels);
+    });
+
     app.get("/", async (req, res) => {
       res.send("application is running");
     });
@@ -103,6 +113,28 @@ async function run() {
         },
       };
       const result = await parcelCollection.updateOne(query, update);
+      res.json(result);
+    });
+
+    // update booking details when clicking the manage Button
+    app.patch("/bookingDetailsUpdate/:id", async (req, res) => {
+      // console.log("hii");
+      const id = req.params.id;
+      const data = req.body;
+      // console.log(id, data);
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: {
+          status: data?.status,
+          deliveryMenId: data?.deliveryMenId,
+          approximateDeliveryDate: data?.approximateDeliveryDate,
+        },
+      };
+
+      const result = await parcelCollection.updateOne(query, update, {
+        upsert: true,
+      });
+      // console.log(result);
       res.json(result);
     });
 
