@@ -47,18 +47,22 @@ async function run() {
       }
     });
 
+    // parcelsBooking Api
     app.post("/bookedParcels", async (req, res) => {
       const result = req.body;
       // console.log(result);
       const parcelInfo = await parcelCollection.insertOne(result);
       res.send(parcelInfo);
     });
+
+    // get all Parcels
     app.get("/allParcels", async (req, res) => {
       const allParcels = await parcelCollection.find().toArray();
       // console.log(cursor);
       res.send(allParcels);
     });
 
+    // get my parcels by email
     app.get("/myParcels/:email", async (req, res) => {
       const email = req.params.email;
       // console.log(email);
@@ -71,20 +75,11 @@ async function run() {
       res.send(myParcels);
     });
 
-    app.get("/singleParcel/:id", async (req, res) => {
-      const id = req.params.id;
-      // console.log(id);
-      const query = { _id: new ObjectId(id) };
-      // console.log(query);
-      const singleParcels = await parcelCollection.findOne(query);
-      return res.send(singleParcels);
-    });
-
     app.get("/", async (req, res) => {
       res.send("application is running");
     });
 
-    //Update function
+    //Update single parcels info by id
 
     app.patch("/update/:id", async (req, res) => {
       const id = req.params.id;
@@ -111,36 +106,59 @@ async function run() {
       res.json(result);
     });
 
+    // Get specific user information
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const result = await userCollection.find({ email }).toArray();
       res.send(result);
     });
 
+    // Get All users
+    app.get("/users", async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
+
+    //Get users by their type
+    app.get("/userType/:deliveryMen", async (req, res) => {
+      const result = await userCollection
+        .find({ userType: "DeliveryMen" })
+        .toArray();
+      res.send(result);
+    });
+
+    // Get users details by their name
+    app.get("/user/:name", async (req, res) => {
+      const displayName = req.params.name;
+      const result = await userCollection.find({ displayName }).toArray();
+      res.send(result);
+    });
+
+    // get user profile
     app.get("/userProfile/:email", async (req, res) => {
       const email = req.params.email;
-
       const result = await userCollection.findOne({ email });
       res.send(result);
     });
 
+    // update user profile
     app.patch("/userProfile/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email };
       const response = req.body;
-      console.log(email, query, response);
+      // console.log(email, query, response);
       const update = {
         $set: {
           photoURL: req.body.photoURL,
         },
       };
-      console.log(update);
+      // console.log(update);
       try {
         const result = await userCollection.updateOne(query, update);
-        console.log(result); // Log update result
+        // console.log(result); // Log update result
         res.json(result); // Return result to client
       } catch (error) {
-        console.error("Error updating user:", error);
+        // console.error("Error updating user:", error);
         res.status(500).json({ error: "Internal server error" });
       }
     });
