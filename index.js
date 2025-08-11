@@ -185,14 +185,35 @@ async function run() {
         },
       };
       // console.log(update);
-      try {
-        const result = await userCollection.updateOne(query, update);
-        // console.log(result); // Log update result
-        res.json(result); // Return result to client
-      } catch (error) {
-        // console.error("Error updating user:", error);
-        res.status(500).json({ error: "Internal server error" });
-      }
+      const result = await userCollection.updateOne(query, update);
+      res.json(result);
+    });
+
+    //update user information by adding phone number fields
+    app.get("/allUsersDetails", async (req, res) => {
+      const result = await userCollection
+        .aggregate([
+          {
+            $lookup: {
+              from: "bookedParcels",
+              localField: "email",
+              foreignField: "buyerEmail",
+              as: "ParcelsInfo",
+            },
+          },
+          {
+            $addFields: {
+              buyerPhoneNo: {
+                $ifNull: [
+                  "$buyerPhoneNo",
+                  { $arrayElemAt: ["$ParcelsInfo.buyerPhoneNo", 0] }, // else from bookedParcels
+                ],
+              },
+            },
+          },
+        ])
+        .toArray();
+      res.json(result);
     });
 
     // Cancel Function
