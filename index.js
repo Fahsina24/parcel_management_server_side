@@ -116,6 +116,42 @@ async function run() {
       res.json(result);
     });
 
+    // update userType
+
+    app.patch("/handleUserType/:id", async (req, res) => {
+      const id = req.params.id;
+      const data = req.body;
+      // console.log(id, data);
+      const query = { _id: new ObjectId(id) };
+      const updateForAdmin = {
+        $set: {
+          userType: "Admin",
+        },
+      };
+      const updateForDeliveryMen = {
+        $set: {
+          userType: "DeliveryMen",
+        },
+      };
+      if (data.userType === "Admin") {
+        const result = await userCollection.updateOne(query, updateForAdmin, {
+          upsert: true,
+        });
+        // console.log(result);
+        res.json(result);
+      } else if (data.userType === "DeliveryMen") {
+        const result = await userCollection.updateOne(
+          query,
+          updateForDeliveryMen,
+          {
+            upsert: true,
+          }
+        );
+        // console.log(result);
+        res.json(result);
+      }
+    });
+
     // update booking details when clicking the manage Button
     app.patch("/bookingDetailsUpdate/:id", async (req, res) => {
       // console.log("hii");
@@ -206,7 +242,7 @@ async function run() {
               buyerPhoneNo: {
                 $ifNull: [
                   "$buyerPhoneNo",
-                  { $arrayElemAt: ["$ParcelsInfo.buyerPhoneNo", 0] }, // else from bookedParcels
+                  { $arrayElemAt: ["$ParcelsInfo.buyerPhoneNo", 0] },
                 ],
               },
             },
