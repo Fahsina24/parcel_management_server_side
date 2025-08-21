@@ -3,6 +3,7 @@ const express = require("express");
 const app = express();
 const port = process.env.PORT || 3000;
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
@@ -46,6 +47,32 @@ async function run() {
         return res.send(result);
       }
     });
+
+    // Jwt Token creation
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN, {
+        expiresIn: "1h",
+      });
+      res.send({ token });
+    });
+
+    // middlewares
+    const verifyToken = (req, res, next) => {
+      // console.log("token", req.headers);
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "forbidden-access" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      // console.log(token);
+      jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "forbidden-access" });
+        }
+        req.decoded = decoded;
+        next();
+      });
+    };
 
     // parcelsBooking Api
     app.post("/bookedParcels", async (req, res) => {
@@ -195,6 +222,18 @@ async function run() {
       res.send(result);
     });
 
+    // Get Specific delivery men deliveryLists
+
+    app.get("/userType/deliveryMen/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log(id);
+      const result = await userCollection
+        .find({ userType: "DeliveryMen" })
+        .toArray();
+
+      res.send(result);
+    });
+
     // Get users details by their name
     app.get("/user/:name", async (req, res) => {
       const displayName = req.params.name;
@@ -226,7 +265,7 @@ async function run() {
     });
 
     //update user information by adding phone number fields
-    app.get("/allUsersDetails", async (req, res) => {
+    app.get("/allUsersDetails", verifyToken, async (req, res) => {
       const result = await userCollection
         .aggregate([
           {
