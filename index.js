@@ -61,21 +61,49 @@ async function run() {
     const verifyToken = (req, res, next) => {
       // console.log("token", req.headers);
       if (!req.headers.authorization) {
-        return res.status(401).send({ message: "forbidden-access" });
+        return res.status(401).send({ message: "Unauthorized Access" });
       }
       const token = req.headers.authorization.split(" ")[1];
       // console.log(token);
       jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
         if (err) {
-          return res.status(401).send({ message: "forbidden-access" });
+          return res.status(401).send({ message: "Unauthorized Access" });
         }
         req.decoded = decoded;
         next();
       });
     };
 
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.userType === "Admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      } else {
+        req.isAdmin = true;
+        req.user = user;
+        next();
+      }
+    };
+
+    const verifyDeliveryMen = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isDeliveryMen = user?.userType === "DeliveryMen";
+      if (!isDeliveryMen) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      } else {
+        req.isDeliveryMen = true;
+        req.user = user;
+        next();
+      }
+    };
+
     // parcelsBooking Api
-    app.post("/bookedParcels", async (req, res) => {
+    app.post("/bookedParcels", verifyToken, async (req, res) => {
       const result = req.body;
       // console.log(result);
       const parcelInfo = await parcelCollection.insertOne(result);
@@ -83,14 +111,14 @@ async function run() {
     });
 
     // get all Parcels
-    app.get("/allParcels", async (req, res) => {
+    app.get("/allParcels", verifyToken, verifyAdmin, async (req, res) => {
       const allParcels = await parcelCollection.find().toArray();
       // console.log(cursor);
       res.send(allParcels);
     });
 
     // get my parcels by email
-    app.get("/myParcels/:email", async (req, res) => {
+    app.get("/myParcels/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       // console.log(email);
       const myParcels = await parcelCollection
@@ -103,7 +131,7 @@ async function run() {
     });
 
     // get parcels by id
-    app.get("/singleParcel/:id", async (req, res) => {
+    app.get("/singleParcel/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       // console.log(id);
       const query = { _id: new ObjectId(id) };
@@ -116,9 +144,18 @@ async function run() {
       res.send("application is running");
     });
 
+    // get user Roles based on Email
+
+    app.get("/users/userRole/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const result = await userCollection.findOne({ email });
+      // console.log(result?.userType);
+      res.send(result?.userType);
+    });
+
     //Update single parcels info by id
 
-    app.patch("/update/:id", async (req, res) => {
+    app.patch("/update/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const data = req.body;
       const query = { _id: new ObjectId(id) };
@@ -145,7 +182,7 @@ async function run() {
 
     // update userType
 
-    app.patch("/handleUserType/:id", async (req, res) => {
+    app.patch("/handleUserType/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const data = req.body;
       // console.log(id, data);
@@ -180,26 +217,31 @@ async function run() {
     });
 
     // update booking details when clicking the manage Button
-    app.patch("/bookingDetailsUpdate/:id", async (req, res) => {
-      // console.log("hii");
-      const id = req.params.id;
-      const data = req.body;
-      // console.log(id, data);
-      const query = { _id: new ObjectId(id) };
-      const update = {
-        $set: {
-          status: data?.status,
-          deliveryMenId: data?.deliveryMenId,
-          approximateDeliveryDate: data?.approximateDeliveryDate,
-        },
-      };
+    app.patch(
+      "/bookingDetailsUpdate/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        // console.log("hii");
+        const id = req.params.id;
+        const data = req.body;
+        // console.log(id, data);
+        const query = { _id: new ObjectId(id) };
+        const update = {
+          $set: {
+            status: data?.status,
+            deliveryMenId: data?.deliveryMenId,
+            approximateDeliveryDate: data?.approximateDeliveryDate,
+          },
+        };
 
-      const result = await parcelCollection.updateOne(query, update, {
-        upsert: true,
-      });
-      // console.log(result);
-      res.json(result);
-    });
+        const result = await parcelCollection.updateOne(query, update, {
+          upsert: true,
+        });
+        // console.log(result);
+        res.json(result);
+      }
+    );
 
     // Get specific user information
     app.get("/users/:email", async (req, res) => {
@@ -209,22 +251,27 @@ async function run() {
     });
 
     // Get All users
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
 
-    //Get users by their type
-    app.get("/userType/:deliveryMen", async (req, res) => {
-      const result = await userCollection
-        .find({ userType: "DeliveryMen" })
-        .toArray();
-      res.send(result);
-    });
+    //Get all deliverymen by their type
+    app.get(
+      "/userType/:deliveryMen",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const result = await userCollection
+          .find({ userType: "DeliveryMen" })
+          .toArray();
+        res.send(result);
+      }
+    );
 
     // Get Specific delivery men deliveryLists
 
-    app.get("/userType/deliveryMen/:id", async (req, res) => {
+    app.get("/userType/deliveryMen/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       console.log(id);
       const result = await userCollection
@@ -235,21 +282,22 @@ async function run() {
     });
 
     // Get users details by their name
-    app.get("/user/:name", async (req, res) => {
+    app.get("/user/:name", verifyToken, verifyAdmin, async (req, res) => {
+      console.log("hs");
       const displayName = req.params.name;
       const result = await userCollection.find({ displayName }).toArray();
       res.send(result);
     });
 
     // get user profile
-    app.get("/userProfile/:email", async (req, res) => {
+    app.get("/userProfile/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const result = await userCollection.findOne({ email });
       res.send(result);
     });
 
     // update user profile
-    app.patch("/userProfile/:email", async (req, res) => {
+    app.patch("/userProfile/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { email };
       const response = req.body;
@@ -265,7 +313,7 @@ async function run() {
     });
 
     //update user information by adding phone number fields
-    app.get("/allUsersDetails", verifyToken, async (req, res) => {
+    app.get("/allUsersDetails", verifyToken, verifyAdmin, async (req, res) => {
       const result = await userCollection
         .aggregate([
           {
@@ -293,7 +341,7 @@ async function run() {
 
     // Cancel Function
 
-    app.patch("/cancel/:id", async (req, res) => {
+    app.patch("/cancel/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const update = {
