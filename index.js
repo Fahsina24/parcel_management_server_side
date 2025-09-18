@@ -271,11 +271,12 @@ async function run() {
 
     // Get Specific delivery men deliveryLists
 
-    app.get("/userType/deliveryMen/:id", verifyToken, async (req, res) => {
-      const id = req.params.id;
-      console.log(id);
-      const result = await userCollection
-        .find({ userType: "DeliveryMen" })
+    app.get("/userType/deliveryMen/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const findUser = await userCollection.findOne({ email });
+      const id = findUser._id.toString();
+      const result = await parcelCollection
+        .find({ deliveryMenId: id })
         .toArray();
 
       res.send(result);
@@ -283,7 +284,6 @@ async function run() {
 
     // Get users details by their name
     app.get("/user/:name", verifyToken, verifyAdmin, async (req, res) => {
-      console.log("hs");
       const displayName = req.params.name;
       const result = await userCollection.find({ displayName }).toArray();
       res.send(result);
@@ -347,6 +347,20 @@ async function run() {
       const update = {
         $set: {
           status: "cancelled",
+        },
+      };
+      const result = await parcelCollection.updateOne(query, update);
+      res.json(result);
+    });
+
+    // Deliver Function
+
+    app.patch("/deliver/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: {
+          status: "delivered",
         },
       };
       const result = await parcelCollection.updateOne(query, update);
