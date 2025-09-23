@@ -29,6 +29,7 @@ async function run() {
     // await client.connect();
     const userCollection = client.db("parcelDB").collection("users");
     const parcelCollection = client.db("parcelDB").collection("bookedParcels");
+    const reviewCollection = client.db("parcelDB").collection("myReviews");
     // save or update users
     app.post("/users/:email", async (req, res) => {
       const email = req.params.email;
@@ -365,6 +366,25 @@ async function run() {
       };
       const result = await parcelCollection.updateOne(query, update);
       res.json(result);
+    });
+
+    // all reviews posted
+    app.post("/reviews", verifyToken, async (req, res) => {
+      const result = req.body;
+      // console.log(result);
+      const allReviews = await reviewCollection.insertOne(result);
+      res.send(allReviews);
+    });
+
+    // all reviews by specific id
+    app.get("/myReviews/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      // console.log(id);
+      const query = { deliveryMenId: id };
+      //  console.log(query);
+      const allReviews = await reviewCollection.find(query).toArray();
+      //  console.log(allReviews);
+      return res.send(allReviews);
     });
 
     // Send a ping to confirm a successful connection
