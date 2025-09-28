@@ -253,7 +253,61 @@ async function run() {
 
     // Get All users
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
-      const result = await userCollection.find().toArray();
+      const result = await userCollection
+        .aggregate([
+          {
+            $lookup: {
+              from: "bookedParcels",
+              localField: "email",
+              foreignField: "buyerEmail",
+              as: "parcels",
+            },
+          },
+          {
+            $addFields: {
+              bookedParcelCount: { $size: "$parcels" },
+              totalParcelPrice: {
+                $sum: {
+                  $map: {
+                    input: "$parcels",
+                    as: "parcel",
+                    in: { $toDouble: "$$parcel.price" },
+                  },
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              parcels: 0,
+            },
+          },
+          {
+            $lookup: {
+              from: "bookedParcels",
+              localField: "email",
+              foreignField: "buyerEmail",
+              as: "ParcelsInfo",
+            },
+          },
+          {
+            $addFields: {
+              buyerPhoneNo: {
+                $ifNull: [
+                  "$buyerPhoneNo",
+                  { $arrayElemAt: ["$ParcelsInfo.buyerPhoneNo", 0] },
+                ],
+              },
+            },
+          },
+          {
+            $project: {
+              ParcelsInfo: 0,
+            },
+          },
+        ])
+        .toArray();
+      // console.log(result);
       res.send(result);
     });
 
@@ -264,24 +318,89 @@ async function run() {
       verifyAdmin,
       async (req, res) => {
         const result = await userCollection
-          .find({ userType: "DeliveryMen" })
+          .aggregate([
+            { $match: { userType: "DeliveryMen" } },
+
+            {
+              $lookup: {
+                from: "bookedParcels",
+                let: { deliveryManId: { $toString: "$_id" } },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ["$deliveryMenId", "$$deliveryManId"] },
+                          { $eq: ["$status", "delivered"] },
+                        ],
+                      },
+                    },
+                  },
+                ],
+                as: "deliveredParcels",
+              },
+            },
+
+            // Lookup reviews from the review collection
+            {
+              $lookup: {
+                from: "myReviews",
+                let: { deliveryManId: { $toString: "$_id" } },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: { $eq: ["$deliveryMenId", "$$deliveryManId"] },
+                    },
+                  },
+                ],
+                as: "reviews",
+              },
+            },
+
+            // Add fields: delivered count and average rating
+            {
+              $addFields: {
+                deliveredCount: { $size: "$deliveredParcels" },
+
+                averageReview: {
+                  $cond: [
+                    { $gt: [{ $size: "$reviews" }, 0] },
+                    { $round: [{ $avg: "$reviews.Ratings" }, 2] },
+                    0,
+                  ],
+                },
+              },
+            },
+
+            {
+              $project: {
+                deliveredParcels: 0,
+                reviews: 0,
+              },
+            },
+          ])
           .toArray();
+
+        console.log(result);
         res.send(result);
       }
     );
 
     // Get Specific delivery men deliveryLists
-
-    app.get("/userType/deliveryMen/:email", verifyToken, async (req, res) => {
-      const email = req.params.email;
-      const findUser = await userCollection.findOne({ email });
-      const id = findUser._id.toString();
-      const result = await parcelCollection
-        .find({ deliveryMenId: id })
-        .toArray();
-
-      res.send(result);
-    });
+    app.get(
+      "/userType/deliveryMen/:email",
+      verifyToken,
+      verifyDeliveryMen,
+      async (req, res) => {
+        const email = req.params.email;
+        const findUser = await userCollection.findOne({ email });
+        const id = findUser._id.toString();
+        const result = await parcelCollection
+          .find({ deliveryMenId: id })
+          .toArray();
+        res.send(result);
+      }
+    );
 
     // Get users details by their name
     app.get("/user/:name", verifyToken, verifyAdmin, async (req, res) => {
@@ -305,7 +424,7 @@ async function run() {
       // console.log(email, query, response);
       const update = {
         $set: {
-          photoURL: req.body.photoURL,
+          photoURL: response.photoURL,
         },
       };
       // console.log(update);
@@ -313,35 +432,7 @@ async function run() {
       res.json(result);
     });
 
-    //update user information by adding phone number fields
-    app.get("/allUsersDetails", verifyToken, verifyAdmin, async (req, res) => {
-      const result = await userCollection
-        .aggregate([
-          {
-            $lookup: {
-              from: "bookedParcels",
-              localField: "email",
-              foreignField: "buyerEmail",
-              as: "ParcelsInfo",
-            },
-          },
-          {
-            $addFields: {
-              buyerPhoneNo: {
-                $ifNull: [
-                  "$buyerPhoneNo",
-                  { $arrayElemAt: ["$ParcelsInfo.buyerPhoneNo", 0] },
-                ],
-              },
-            },
-          },
-        ])
-        .toArray();
-      res.json(result);
-    });
-
     // Cancel Function
-
     app.patch("/cancel/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -377,16 +468,99 @@ async function run() {
     });
 
     // all reviews by specific id
-    app.get("/myReviews/:id", verifyToken, async (req, res) => {
-      const id = req.params.id;
-      // console.log(id);
-      const query = { deliveryMenId: id };
-      //  console.log(query);
-      const allReviews = await reviewCollection.find(query).toArray();
-      //  console.log(allReviews);
-      return res.send(allReviews);
+    app.get(
+      "/myReviews/:id",
+      verifyToken,
+      verifyDeliveryMen,
+      async (req, res) => {
+        const id = req.params.id;
+        // console.log(id);
+        const query = { deliveryMenId: id };
+        //  console.log(query);
+        const allReviews = await reviewCollection.find(query).toArray();
+        //  console.log(allReviews);
+        return res.send(allReviews);
+      }
+    );
+
+    // Create the statistics count API for homepage
+    app.get("/stats", async (req, res) => {
+      const TotalParcelsBooked = await parcelCollection.countDocuments();
+      const TotalUsers = await userCollection.countDocuments();
+      const TotalParcelsDelivered = await parcelCollection.countDocuments({
+        status: "delivered",
+      });
+      const values = [
+        {
+          parcelBooked: TotalParcelsBooked,
+          parcelDelivered: TotalParcelsDelivered,
+          allUsers: TotalUsers,
+        },
+      ];
+      res.send(values);
     });
 
+    // Create the top delivery men
+    app.get("/topDeliveryMen", async (req, res) => {
+      const TotalParcelsDelivered = await parcelCollection
+        .aggregate([
+          { $match: { status: "delivered" } },
+          {
+            $group: {
+              _id: "$deliveryMenId",
+              totalParcels: { $sum: 1 },
+            },
+          },
+          {
+            $lookup: {
+              from: "myReviews",
+              localField: "_id",
+              foreignField: "deliveryMenId",
+              as: "reviews",
+            },
+          },
+          {
+            $addFields: {
+              averageRating: {
+                $cond: [
+                  { $gt: [{ $size: "$reviews" }, 0] },
+                  { $avg: "$reviews.Ratings" },
+                  0,
+                ],
+              },
+            },
+          },
+          {
+            $addFields: {
+              deliveryMenObjectId: { $toObjectId: "$_id" },
+            },
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "deliveryMenObjectId",
+              foreignField: "_id",
+              as: "user",
+            },
+          },
+          { $unwind: "$user" },
+          {
+            $project: {
+              _id: 0,
+              deliveryMenId: "$_id",
+              name: "$user.displayName",
+              image: "$user.photoURL",
+              totalParcels: 1,
+              averageRating: { $round: ["$averageRating", 2] },
+            },
+          },
+          { $sort: { totalParcels: -1, averageRating: -1 } },
+          { $limit: 3 },
+        ])
+        .toArray();
+      // console.log(TotalParcelsDelivered);
+      res.send(TotalParcelsDelivered);
+    });
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
     // console.log(
